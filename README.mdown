@@ -1,0 +1,137 @@
+## Reflex-Arc
+
+Here we check out an FRP library for Haskell [Reflex-DOM](https://github.com/ryantrinkle/reflex-dom). The easiest way to test it is to follow the [standard instructions](https://github.com/ryantrinkle/try-reflex/) which make use of the [Nix](https://nixos.org/nix/) package manager. If you wish to consider other development branches than master, you may apply the instructions below which describe a build process using cabal. 
+
+### Installation
+
+The main difficulty with installing Reflex-DOM is the existence of external dependencies not related to Haskell. You will need to look at the log files to find out which C libraries are missing:
+```
+cabal install filename.cabal > logfile.txt
+tail -f logfile.txt
+```
+In my case, I had to find several [packages for Arch Linux](https://www.archlinux.org/packages/) to install the upgrades: 
+```
+webkitgtk-2.4.9-2-x86_64.pkg.tar.xz
+icu-56.1-1-x86_64.pkg.tar.xz
+harfbuzz-icu-1.1.2-1-x86_64.pkg.tar.xz
+http-parser-2.6.0-1-x86_64.pkg.tar.xz
+libuv-1.7.5-1-x86_64.pkg.tar.xz
+nodejs-5.1.0-1-x86_64.pkg.tar.xz
+```
+On another computer, this list might be different, including a possibility of being empty, but, in any case, be careful not to remove the `*.so` files required by other applications. 
+
+We are going to install the [ghcjs](https://github.com/ghcjs/ghcjs) compiler and the [reflex](https://github.com/ryantrinkle/reflex) and [reflex-dom](https://github.com/ryantrinkle/reflex-dom) libraries into the same cabal sandbox at `~/ghcjs-reflex`.
+Clean up the system: 
+```
+rm -rf ~/.cabal
+rm -rf ~/.ghc
+rm -rf ~/.ghcjs
+```
+create a sandbox: 
+```
+mkdir ~/ghcjs-reflex
+cd ~/ghcjs-reflex
+cabal sandbox init
+```
+and install prerequisites:
+```
+cabal update
+cabal install alex happy c2hs gtk2hs-buildtools
+```
+
+Clone ghcjs and run the installation script:
+```
+git clone https://github.com/ghcjs/ghcjs
+cabal install ghcjs/ghcjs.cabal
+```
+If the installation fails, search for the missing C libraries exploring the log files as explained above. In case of success, execute:
+```
+export PATH=`pwd`/.cabal-sandbox/bin:$PATH
+```
+
+The next step:
+```
+git clone https://github.com/isomorphism/these.git   
+cabal install these/these.cabal
+```
+Please note, that the current version 0.6.1.0 on hackage has the same name, but it is different and it has wrong dependencies. You need the one from GitHub. After that one may proceed with the reflex library: 
+```
+git clone https://github.com/ryantrinkle/reflex.git
+cd reflex
+git checkout master
+```
+By default the branch is *develop*, and this might not be what you wish, so we have switched to *master*. You need to make a patch:
+```
+cp reflex.cabal reflex.cabal.orig
+emacs reflex.cabal &
+```
+Find the line with the dependency for semigroups, and change the upper bound to < 0.19. Originally, the boundary is set to < 0.18, but the system is about to try version 0.18.0.1. Go back to the sandbox directory and run the installation script: 
+```
+cd ..
+cabal install reflex/reflex.cabal
+```
+
+Assuming the system is not complaining about the external C libraries, proceed to the installation of reflex-dom. It is of interest to checkout a non-master branch **ghcjs-improved-base-2**:
+```
+git clone https://github.com/ryantrinkle/reflex-dom.git
+cd reflex-dom
+git checkout ghcjs-improved-base-2
+```
+Edit the installation script:
+```
+cp reflex-dom.cabal reflex-dom.cabal.orig
+emacs reflex-dom.cabal &
+```
+and change the upper bound for the semigroups dependency to < 0.19, like in `reflex/reflex.cabal`. Switch back to the sandbox directory, and continue with the installation:
+```
+cd ..
+cabal install reflex-dom/reflex-dom.cabal
+```
+
+The next step is to compile the libraries meant to work with ghcjs.
+Run the script
+```
+ghcjs-boot --dev
+```
+and after it finishes, execute:
+```
+cabal install these/these.cabal --ghcjs
+cabal install reflex/reflex.cabal --ghcjs
+cabal install reflex-dom/reflex-dom.cabal --ghcjs
+```
+Assuming everything goes well, add the final touch: 
+```
+cabal install hscolour
+cabal install hscolour --ghcjs
+```
+You are ready to start working with Reflex-DOM.
+
+### Testing
+
+You might wish to modify the file `~/.bashrc` to keep ghcjs in your PATH for the future sessions. To activate the modified PATH without logging out, run `source ~/.bashrc`. Change to your working directory, copy the file `hello.hs`, and test your installation:
+```
+ghc -O2 -j hello.hs -Wall -package-db ~/ghcjs-reflex/.cabal-sandbox/x86_64-linux-ghc-7.10.2-packages.conf.d/
+./hello
+```
+The path corresponding to the -package-db option might be slightly different in your case depending on the version of the ghc compiler.
+
+To work in ghci, run:
+```
+ghci -package-db ~/ghcjs-reflex/.cabal-sandbox/x86_64-linux-ghc-7.10.2-packages.conf.d/
+```
+
+To compile a javascript code, execute:
+```
+ghcjs --make hello.hs -package-db ~/ghcjs-reflex/.cabal-sandbox/x86_64-linux-ghcjs-0.2.0-ghc7_10_2-packages.conf.d/
+```
+This is going to create a subdirectory `hello.jsexe` containing `index.html` which you can open in your browser.
+
+### Comments
+
+The commits used in the described installation:
+```
+ghcjs: commit 561365ba1667053b5dc5846e2a8edb33eaa3f6dd
+these: commit 0d6095da2494ce5469bca64a6debaf6ed708849f
+reflex: commit 4b928220e3f226e0cdbc666a020ba63bddc151dc
+reflex-dom: commit a10ddfd9920e239c674feda34f6ba4ce0cb2b673
+```
